@@ -1,12 +1,37 @@
 import requests
+from selenium import webdriver
 from bs4 import BeautifulSoup
 
-get_sentiment = False
+#URL = "https://www.cnbc.com/2024/04/03/stock-market-today-live-updates.html"
 
-URL = "https://www.cnbc.com/2024/04/01/stock-market-today-live-updates.html"
-page = requests.get(URL)
 
-soup = BeautifulSoup(page.content, "html.parser")
+# THANKS TO ChatGPT For the alternate approach
+def get_soup_from_url(URL : str) -> BeautifulSoup:
+    '''
+    Gets the soup/html from a given URL
+
+    Args:
+        str URL: The url to get the soup from
+
+    Returns:
+        BeautifulSoup: The html of the URL
+    '''
+
+    # Initialize Selenium WebDriver
+    driver = webdriver.Chrome()  # You may need to download the Chrome driver from https://sites.google.com/a/chromium.org/chromedriver/downloads
+
+    # Open the URL
+    driver.get(URL)
+
+    # Get the page source after it's been fully loaded
+    page_source = driver.page_source
+
+    # Close the WebDriver
+    driver.quit()
+
+    soup = BeautifulSoup(page_source, "html.parser")
+
+    return soup
 
 def find_text_body(soup : BeautifulSoup) -> BeautifulSoup:
     '''
@@ -39,6 +64,7 @@ def find_text_body(soup : BeautifulSoup) -> BeautifulSoup:
 
             if (text_body != None):
                 break
+    
 
     return text_body
 
@@ -57,12 +83,9 @@ def extract_text(original_soup : BeautifulSoup, text_body : BeautifulSoup) -> st
     # from the text body found
     if (text_body == None):
         print("No matches found...")
-        paragraphs = soup.find_all("p")
+        paragraphs = original_soup.find_all("p")
     else:
         paragraphs = text_body.find_all("p")
-
-    # Extracts the header from the article as well
-    header = soup.find("h1")
 
     # Add the header to the start of the paragraphs list
     #paragraphs.insert(0, header.text)
@@ -70,6 +93,18 @@ def extract_text(original_soup : BeautifulSoup, text_body : BeautifulSoup) -> st
     # Filter out any sentences less than 70 characters long
     filtered_paragraphs = [p.text for p in paragraphs if len(p.text) > 70]
     blacklisted_paragraphs = [p.text for p in paragraphs if len(p.text) <= 70]
+
+    # Extracts the header from the article as well
+    header = original_soup.find("h1")
+
+    # Only add if it exists
+    if (header != None):
+
+        # Extract the text
+        header = header.text
+
+        # Add the header to the list of paragraphs
+        filtered_paragraphs.insert(0, header)
 
     print("Num paragrapghs found:", len(filtered_paragraphs))
     print("Num blacklisted paragraphs:", len(blacklisted_paragraphs))
@@ -111,7 +146,7 @@ def get_total_sentiment(text : str, get_sentiment = False) -> dict:
 
     # Uses API from https://rapidapi.com/knowledgator-knowledgator-default/api/comprehend-it/
     # Calculates the overall sentiment of a given article
-    # NOTE: I ONLY GET 300 REQUESTS PLEASE DON'T WASTE IT (299/300)
+    # NOTE: I ONLY GET 300 REQUESTS PLEASE DON'T WASTE IT (293/300)
     url = "https://comprehend-it.p.rapidapi.com/predictions/ml-zero-nli-model"
 
     payload = {
@@ -125,12 +160,14 @@ def get_total_sentiment(text : str, get_sentiment = False) -> dict:
     }
 
     # Make get_sentiment true if we want to use a real data set - otherwise, use the originally generated one
+    print("Sentiment:", get_sentiment)
     if (get_sentiment):
         response = requests.post(url, json=payload, headers=headers)
         print(response.json())
         return response.json()
     else:
         response = {'outputs': {'neutral': 0.8971490263938904, 'negative': 0.7393637895584106, 'positive': 0.20099657773971558}, 'truncated': False}
+        # Another response that is positive - {'outputs': {'positive': 0.9282442927360535, 'neutral': 0.9151404500007629, 'negative': 0.1627216339111328}, 'truncated': False}
         return response
 
 def assess_sentiment(neutral_sent : float, negative_sent : float, positive_sent : float) -> str:
@@ -143,32 +180,146 @@ def assess_sentiment(neutral_sent : float, negative_sent : float, positive_sent 
     else:
         return "Sell Stocks!"
 
-# Get the section of text from the website to begin extracting
-html_body = find_text_body(soup)
+def get_sentiment_from_url(URL : str, get_sentiment : bool) -> dict:
+    '''
+    Given a URL, it will grab information from that website and calculate its sentiment
 
-# Get an array of paragraphs from the html body
-extracted_text = extract_text(soup, html_body)
+    Args:
+        str URL: The url to get the sentiment from
+        bool get_sentiment: Determines whether to return the sample sentiment
+                            or to use the API to calculate it
 
-# Create a variable to store all the paragraphs into a single variable
-full_text = ""
+    Returns:
+        dict: A dictionary containing the sentiment of the website
+              {'positive' : float, 'neutral' : float, 'negative' : float}
+    '''
 
-# Add each paragraph to the full_text variable
-# At the same time, clean each paragraph before 
-#   it goes in to reduce strain on the sentiment dictionary
-for paragraph in extracted_text:
-    full_text += '\n' + clean_text(paragraph)
+    # The URL to test
+    #URL = "https://www.aol.com/news/stock-market-today-asian-shares-072407487.html"
 
-# Calculate the total sentiment from the cleaned data
-sentiment_dict = get_total_sentiment(full_text, False)
+    soup = get_soup_from_url(URL)
 
-outputs = sentiment_dict['outputs']
+    # Get the section of text from the website to begin extracting
+    html_body = find_text_body(soup)
 
-positive_sentiment = outputs['positive']
-neutral_sentiment = outputs['neutral']
-negative_sentiment = outputs['negative']
+    # Get an array of paragraphs from the html body
+    extracted_text = extract_text(soup, html_body)
 
-print("Full Text", full_text)
-print()
-print("Total Sentiment", sentiment_dict)
-print()
-print("Stock Assessment:", assess_sentiment(neutral_sentiment, negative_sentiment, positive_sentiment))
+    # Create a variable to store all the paragraphs into a single variable
+    full_text = ""
+
+    # Add each paragraph to the full_text variable
+    # At the same time, clean each paragraph before 
+    #   it goes in to reduce strain on the sentiment dictionary
+    for paragraph in extracted_text:
+        full_text += '\n' + clean_text(paragraph)
+
+    # Calculate the total sentiment from the cleaned data
+    sentiment_dict = get_total_sentiment(full_text, get_sentiment)
+
+    print("Full Text: " + full_text)
+    print("Sentiment dictionary: " + str(sentiment_dict))
+
+    outputs = sentiment_dict['outputs']
+
+    return outputs
+
+# (23/25) uses left!!!
+def get_news_website_urls(topic : str, use_test_data : bool) -> dict:
+
+    if (use_test_data):
+        url = "https://google-news13.p.rapidapi.com/search"
+
+        querystring = {"keyword":topic,"lr":"en-US"}
+
+        headers = {
+            "X-RapidAPI-Key": "d0911aed33mshfad6c36de6f8832p1311c4jsn34e12f8dfef9",
+            "X-RapidAPI-Host": "google-news13.p.rapidapi.com"
+        }
+
+        response = requests.get(url, headers=headers, params=querystring)
+
+        print(response.json())
+    else:
+        return ['https://www.cnbc.com/2024/04/03/stock-market-today-live-updates.html', 
+                'https://www.marketwatch.com/livecoverage/stock-market-today-dow-futures-rise-as-bond-yields-steady', 
+                'https://www.wsj.com/livecoverage/stock-market-today-dow-jones-04-04-2024', 
+                'https://finance.yahoo.com/news/live/stock-market-today-tech-leads-market-bounce-as-powell-soothes-rate-cut-nerves-133121789.html', 
+                'https://www.investors.com/market-trend/stock-market-today/dow-jones-sp500-nasdaq-nvidia-nvda-stock-google-googl-meta/', 
+                'https://www.barrons.com/livecoverage/stock-market-today-040424', 
+                'https://www.investopedia.com/dow-jones-today-04042024-8624640', 
+                'https://www.bloomberg.com/news/articles/2024-04-03/stock-market-today-dow-s-p-live-updates', 
+                'https://markets.businessinsider.com/news/stocks/stock-market-today-weekly-jobless-claims-fed-rate-cut-plan-2024-4', 
+                'https://www.investors.com/market-trend/stock-market-today/dow-jones-sp500-nasdaq-nvidia-nvda-stock-tesla-tsla/']
+
+    response_dict = response.json()
+
+    response_results = response_dict['items']
+
+    urls = []
+    for i in range(10):
+        response_result = response_results[i]
+        url = response_result["newsUrl"]
+        urls.append(url)
+
+    return urls
+
+def filter_out_blacklisted_urls(URLs : str) -> str:
+
+    # Initialize the list of blacklisted websites
+    blacklisted_websites = ["wsj.com", "marketwatch.com", "bloomberg.com", "investors.com"]
+
+    cleaned_url_list = []
+
+    for i in range(len(URLs)):
+
+        url = URLs[i]
+
+        # Remove the opener portion
+        url = url.replace('https://www.', '').replace('http://www.','')
+
+        # Extract the name.com from the url
+        url = url.split('/')[0]
+
+        # Add the url if it is not in the blacklist
+        if url not in blacklisted_websites:
+            cleaned_url_list.append(URLs[i])
+
+    return cleaned_url_list
+
+
+def main():
+
+    # Get a list of URLS for a relevant stock
+    urls = get_news_website_urls("dow jones stock", True)
+    print(urls)
+
+    # Remove all URLS that have been found to be incompatible with the webscraper
+    cleaned_urls = filter_out_blacklisted_urls(urls)
+
+    print("cleaned urls:", cleaned_urls)
+
+    total_positive_sentiment = 0
+    total_neutral_sentiment = 0
+    total_negative_sentiment = 0
+
+    print("Number of URLS tested:", len(cleaned_urls))
+
+    for URL in cleaned_urls:
+
+        # Determines whether to actually use the Sentiment API or not
+        get_sentiment = True
+        print("Opening URL:", URL)
+        sentiment_output = get_sentiment_from_url(URL, get_sentiment)
+
+        positive_sentiment = sentiment_output['positive']
+        neutral_sentiment = sentiment_output['neutral']
+        negative_sentiment = sentiment_output['negative']
+
+        total_positive_sentiment += positive_sentiment
+        total_neutral_sentiment += neutral_sentiment
+        total_negative_sentiment += negative_sentiment
+
+        print("Stock Assessment:", assess_sentiment(total_neutral_sentiment, total_negative_sentiment, total_positive_sentiment))
+
+main()
