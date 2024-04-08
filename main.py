@@ -2,6 +2,8 @@ import requests
 from selenium import webdriver
 from bs4 import BeautifulSoup
 
+from apikey import personal_api_key
+
 #URL = "https://www.cnbc.com/2024/04/03/stock-market-today-live-updates.html"
 
 
@@ -146,7 +148,7 @@ def get_total_sentiment(text : str, get_sentiment = False) -> dict:
 
     # Uses API from https://rapidapi.com/knowledgator-knowledgator-default/api/comprehend-it/
     # Calculates the overall sentiment of a given article
-    # NOTE: I ONLY GET 300 REQUESTS PLEASE DON'T WASTE IT (267/300)
+    # NOTE: I ONLY GET 300 REQUESTS PLEASE DON'T WASTE IT (252/300)
     url = "https://comprehend-it.p.rapidapi.com/predictions/ml-zero-nli-model"
 
     payload = {
@@ -155,7 +157,7 @@ def get_total_sentiment(text : str, get_sentiment = False) -> dict:
     }
     headers = {
         "content-type": "application/json",
-        "X-RapidAPI-Key": "d0911aed33mshfad6c36de6f8832p1311c4jsn34e12f8dfef9",
+        "X-RapidAPI-Key": personal_api_key,
         "X-RapidAPI-Host": "comprehend-it.p.rapidapi.com"
     }
 
@@ -227,7 +229,7 @@ def get_sentiment_from_url(URL : str, get_sentiment : bool) -> dict:
 
     return outputs
 
-# (20/25) uses left!!!
+# (19/25) uses left!!!
 def get_news_website_urls(topic : str, use_test_data : bool) -> dict:
 
     if (use_test_data):
@@ -236,7 +238,7 @@ def get_news_website_urls(topic : str, use_test_data : bool) -> dict:
         querystring = {"keyword":topic,"lr":"en-US"}
 
         headers = {
-            "X-RapidAPI-Key": "d0911aed33mshfad6c36de6f8832p1311c4jsn34e12f8dfef9",
+            "X-RapidAPI-Key": personal_api_key,
             "X-RapidAPI-Host": "google-news13.p.rapidapi.com"
         }
 
@@ -302,7 +304,7 @@ def main():
     stock_name += " stock"
 
     # Get a list of URLS for a relevant stock
-    urls = get_news_website_urls(stock_name, get_sentiment)
+    urls = get_news_website_urls(stock_name, False)
     print(urls)
 
     # Remove all URLS that have been found to be incompatible with the webscraper
