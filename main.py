@@ -1,22 +1,3 @@
-'''
-Stock Sentiment Evaluator
-
-By Jason Pelkey
-
-Credit to ChatGPT for help with dynamic Web Scraping and advice on some errors with Apis
-Thanks to RealPython for Web their Scraping Tutorial https://realpython.com/python-web-scraping-practical-introduction/
-Thanks to Geeks for Geeks for yet another Web Scraping Tutorial https://www.geeksforgeeks.org/python-web-scraping-tutorial/
-Thanks to Mr. Winikka for helping me get over my fear of APIS
-Thanks to Rapid API for their easy access to free APIS and easy to use software https://rapidapi.com/hub
-
-Given a topic, the Google News Search API will find the top 100 search results of that topic.
-We then take the top 10 (for relevancy's sake) and extract the body text from it.
-Using a Sentiment API calculator, we then establish whether the content was generally positive or negative about the topic
-After all links have been scanned, the program will give a stock assessment of whether to hold stocks, sell stocks, or buy stocks
-
-NOTE: Be careful using the program, I only get 25 google searches per month!
-'''
-
 import requests
 from selenium import webdriver
 from bs4 import BeautifulSoup
@@ -165,7 +146,7 @@ def get_total_sentiment(text : str, get_sentiment = False) -> dict:
 
     # Uses API from https://rapidapi.com/knowledgator-knowledgator-default/api/comprehend-it/
     # Calculates the overall sentiment of a given article
-    # NOTE: I ONLY GET 300 REQUESTS PLEASE DON'T WASTE IT (262/300)
+    # NOTE: I ONLY GET 300 REQUESTS PLEASE DON'T WASTE IT (267/300)
     url = "https://comprehend-it.p.rapidapi.com/predictions/ml-zero-nli-model"
 
     payload = {
@@ -179,17 +160,10 @@ def get_total_sentiment(text : str, get_sentiment = False) -> dict:
     }
 
     # Make get_sentiment true if we want to use a real data set - otherwise, use the originally generated one
-    print("Use True Data:", get_sentiment)
+    print("Sentiment:", get_sentiment)
     if (get_sentiment):
-
-        try:
-            response = requests.post(url, json=payload, headers=headers)
-            #print(response.json())
-        except:
-            print("<!> Sentiment grab failed, returning default values...")
-            return {'neutral': 0.0, 'negative': 0.0, 'positive': 0.0}
-            return
-        
+        response = requests.post(url, json=payload, headers=headers)
+        print(response.json())
         return response.json()
     else:
         response = {'outputs': {'neutral': 0.8971490263938904, 'negative': 0.7393637895584106, 'positive': 0.20099657773971558}, 'truncated': False}
@@ -231,11 +205,6 @@ def get_sentiment_from_url(URL : str, get_sentiment : bool) -> dict:
     # Get an array of paragraphs from the html body
     extracted_text = extract_text(soup, html_body)
 
-    # If we think that the scrape failed, return default values in order to not interfere with the test
-    if (len(extracted_text) <= 3):
-        print("<?> Source is likely using bot protection, returning default values...")
-        return {'neutral': 0.0, 'negative': 0.0, 'positive': 0.0}
-
     # Create a variable to store all the paragraphs into a single variable
     full_text = ""
 
@@ -245,17 +214,20 @@ def get_sentiment_from_url(URL : str, get_sentiment : bool) -> dict:
     for paragraph in extracted_text:
         full_text += '\n' + clean_text(paragraph)
 
-    # Calculate the total sentiment from the cleaned data
-    sentiment_dict = get_total_sentiment(full_text, get_sentiment)
+    try:
+        # Calculate the total sentiment from the cleaned data
+        sentiment_dict = get_total_sentiment(full_text, get_sentiment)
 
-    print("Full Text: " + full_text)
-    print("Sentiment dictionary: " + str(sentiment_dict))
+        print("Full Text: " + full_text)
+        print("Sentiment dictionary: " + str(sentiment_dict))
 
-    outputs = sentiment_dict['outputs']
+        outputs = sentiment_dict['outputs']
+    except:
+        outputs = {'positive' : 0.0, 'neutral' : 0.0, 'negative' : 0.0}
 
     return outputs
 
-# (22/25) uses left!!!
+# (20/25) uses left!!!
 def get_news_website_urls(topic : str, use_test_data : bool) -> dict:
 
     if (use_test_data):
@@ -281,7 +253,8 @@ def get_news_website_urls(topic : str, use_test_data : bool) -> dict:
                 'https://www.investopedia.com/dow-jones-today-04042024-8624640', 
                 'https://www.bloomberg.com/news/articles/2024-04-03/stock-market-today-dow-s-p-live-updates', 
                 'https://markets.businessinsider.com/news/stocks/stock-market-today-weekly-jobless-claims-fed-rate-cut-plan-2024-4', 
-                'https://www.investors.com/market-trend/stock-market-today/dow-jones-sp500-nasdaq-nvidia-nvda-stock-tesla-tsla/']
+                'https://www.investors.com/market-trend/stock-market-today/dow-jones-sp500-nasdaq-nvidia-nvda-stock-tesla-tsla/',
+                'https://www.barrons.com/articles/stock-market-bounces-jobs-report-97bd920b']
 
     response_dict = response.json()
 
@@ -298,7 +271,7 @@ def get_news_website_urls(topic : str, use_test_data : bool) -> dict:
 def filter_out_blacklisted_urls(URLs : str) -> str:
 
     # Initialize the list of blacklisted websites
-    blacklisted_websites = ["wsj.com"] #, "marketwatch.com", "bloomberg.com", "investors.com"]
+    blacklisted_websites = ["wsj.com", "marketwatch.com", "bloomberg.com", "investors.com"]
 
     cleaned_url_list = []
 
@@ -318,10 +291,18 @@ def filter_out_blacklisted_urls(URLs : str) -> str:
 
     return cleaned_url_list
 
-def get_stock_evaluation_from_topic(topic : str, use_api_data : bool) -> str:
+
+def main():
+
+    # Determines whether to actually use the Sentiment API or not
+    get_sentiment = True
+
+    # Get the stock to assess
+    stock_name = input("What stock would you like to assess? ")
+    stock_name += " stock"
 
     # Get a list of URLS for a relevant stock
-    urls = get_news_website_urls(topic, use_api_data)
+    urls = get_news_website_urls(stock_name, get_sentiment)
     print(urls)
 
     # Remove all URLS that have been found to be incompatible with the webscraper
@@ -337,13 +318,7 @@ def get_stock_evaluation_from_topic(topic : str, use_api_data : bool) -> str:
 
     for URL in cleaned_urls:
 
-        # Determines whether to actually use the Sentiment API or not
-        get_sentiment = use_api_data
-
         print("Opening URL:", URL)
-        print("Please wait, it will take a moment...")
-        print()
-
         sentiment_output = get_sentiment_from_url(URL, get_sentiment)
 
         positive_sentiment = sentiment_output['positive']
@@ -353,26 +328,11 @@ def get_stock_evaluation_from_topic(topic : str, use_api_data : bool) -> str:
         total_positive_sentiment += positive_sentiment
         total_neutral_sentiment += neutral_sentiment
         total_negative_sentiment += negative_sentiment
-        
+
         print()
-        print("Article's Stock Assessment:", assess_sentiment(neutral_sentiment, negative_sentiment, positive_sentiment))
-        print("Stock Assessment So Far:", assess_sentiment(total_neutral_sentiment, total_negative_sentiment, total_positive_sentiment))
+        print("Stock Assessment:", assess_sentiment(total_neutral_sentiment, total_negative_sentiment, total_positive_sentiment))
         print()
-
-    return "Final Stock Assessment: " + assess_sentiment(total_neutral_sentiment, total_negative_sentiment, total_positive_sentiment)
-
-def main():
-
-    print(get_stock_evaluation_from_topic("dow jones", False))
-
-    # FOR MR. WINIKKA - Comment the above function and uncomment the below one
-    # This uses the APIs instead of default data - I have limited uses, so keep that in mind
-
-    # Add your topic here (preferrably stock related)
-    topic = ""
-
-    # UNCOMMENT THIS
-    #print(get_stock_evaluation_from_topic(topic, True))
     
+    print("All websites assessed")
 
 main()
